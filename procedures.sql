@@ -210,18 +210,104 @@ GO
 
 
 
-IF OBJECT_ID('AfficherClientsAvecAbonnementsEtParticipations', 'P') IS NOT NULL
-    DROP PROCEDURE AfficherClientsAvecAbonnementsEtParticipations;
+-- Création de la procédure
+IF OBJECT_ID('spRechercherClientParNom', 'P') IS NOT NULL
+    DROP PROCEDURE spRechercherClientParNom
 GO
 
-CREATE PROCEDURE AfficherClientsAvecAbonnementsEtParticipations
+CREATE PROCEDURE spRechercherClientParNom
+    @NomClient VARCHAR(255)
 AS
 BEGIN
-    SELECT c.ID AS ClientID, c.Nom AS ClientNom,
-           a.ID_forfait AS AbonnementID, f.Prix AS ForfaitPrix,
-           p.ID_activité AS ActiviteID
-    FROM Clients c
-    LEFT JOIN Abonnements a ON c.ID = a.ID_client
-    LEFT JOIN Forfaits f ON a.ID_forfait = f.ID
-    LEFT JOIN Participations p ON c.ID = p.ID_client;
-END;
+    -- Recherche du client par son nom (insensible à la casse et correspondance partielle)
+    SELECT C.ID, C.Nom, C.Adresse, C.Numéro_de_téléphone, C.Adresse_email, C.Paiement_réglé,
+           F.Nom_du_forfait,
+           A.Nom_de_l_activité
+    FROM Clients C
+    LEFT JOIN Abonnements Abo ON C.ID = Abo.ID_client
+    LEFT JOIN Forfaits F ON Abo.ID_forfait = F.ID
+    LEFT JOIN Participations P ON C.ID = P.ID_client
+    LEFT JOIN Activités A ON P.ID_activité = A.ID
+    WHERE LOWER(C.Nom) LIKE '%' + LOWER(@NomClient) + '%';
+END
+GO
+
+-- Création de la procédure
+IF OBJECT_ID('spRechercherEntraineursParSpecialite', 'P') IS NOT NULL
+    DROP PROCEDURE spRechercherEntraineursParSpecialite
+GO
+
+CREATE PROCEDURE spRechercherEntraineursParSpecialite
+    @Specialite VARCHAR(255)
+AS
+BEGIN
+    -- Recherche des entraîneurs par spécialité et leurs activités associées
+    SELECT E.ID, E.Spécialité, A.ID AS ActiviteID, A.Nom_de_l_activité
+    FROM Entraineurs E
+    LEFT JOIN Activités A ON E.ID = A.ID_entraîneur
+    WHERE E.Spécialité LIKE '%' + @Specialite + '%';
+END
+GO
+
+-- Création de la procédure
+IF OBJECT_ID('spRechercherSalleActivites', 'P') IS NOT NULL
+    DROP PROCEDURE spRechercherSalleActivites
+GO
+
+CREATE PROCEDURE spRechercherSalleActivites
+    @NomSalle VARCHAR(255) = NULL,
+    @IDSalle INT = NULL
+AS
+BEGIN
+    -- Recherche de la salle par nom ou ID et affichage des activités associées
+    SELECT S.ID, S.Nom_de_la_salle, A.ID AS ActiviteID, A.Nom_de_l_activité
+    FROM Salles S
+    INNER JOIN Activités A ON S.ID = A.ID_salle
+    WHERE (S.Nom_de_la_salle LIKE '%' + @NomSalle + '%' OR S.ID = @IDSalle);
+END
+GO
+
+
+-- Création de la procédure
+IF OBJECT_ID('spRechercherForfaitActivites', 'P') IS NOT NULL
+    DROP PROCEDURE spRechercherForfaitActivites
+GO
+
+CREATE PROCEDURE spRechercherForfaitActivites
+    @NomForfait VARCHAR(255)
+AS
+BEGIN
+    -- Recherche du forfait par nom et affichage des activités et du nombre d'abonnements associés
+    SELECT F.ID, F.Nom_du_forfait, A.ID AS ActiviteID, A.Nom_de_l_activité, COUNT(AB.ID_client) AS NombreAbonnements
+    FROM Forfaits F
+    LEFT JOIN Forfait_Activité FA ON F.ID = FA.ID_forfait
+    LEFT JOIN Activités A ON FA.ID_activité = A.ID
+    LEFT JOIN Abonnements AB ON F.ID = AB.ID_forfait
+    WHERE F.Nom_du_forfait LIKE '%' + @NomForfait + '%'
+    GROUP BY F.ID, F.Nom_du_forfait, A.ID, A.Nom_de_l_activité;
+END
+GO
+
+-- Création de la procédure
+IF OBJECT_ID('spRechercherActiviteForfaits', 'P') IS NOT NULL
+    DROP PROCEDURE spRechercherActiviteForfaits
+GO
+
+CREATE PROCEDURE spRechercherActiviteForfaits
+    @NomActivite VARCHAR(255) = NULL,
+    @SpecialiteEntraîneur VARCHAR(255) = NULL
+AS
+BEGIN
+    -- Recherche de l'activité par nom ou spécialité de l'entraîneur et affichage des forfaits et places restantes
+    SELECT A.ID AS ActiviteID, A.Nom_de_l_activité, E.Spécialité, F.ID AS ForfaitID, F.Nom_du_forfait, F.Limite_participants - COUNT(P.ID_activité) AS PlacesRestantes
+    FROM Activités A
+    LEFT JOIN Entraineurs E ON A.ID_entraîneur = E.ID
+    LEFT JOIN Forfait_Activité FA ON A.ID = FA.ID_activité
+    LEFT JOIN Forfaits F ON FA.ID_forfait = F.ID
+    LEFT JOIN Participations P ON A.ID = P.ID_activité
+    WHERE (A.Nom_de_l_activité LIKE '%' + @NomActivite + '%' OR E.Spécialité LIKE '%' + @SpecialiteEntraîneur + '%')
+    GROUP BY A.ID, A.Nom_de_l_activité, E.Spécialité, F.ID, F.Nom_du_forfait, F.Limite_participants;
+END
+GO
+
+
